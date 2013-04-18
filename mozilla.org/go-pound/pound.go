@@ -8,17 +8,62 @@ import (
 	"os"
 	"runtime"
 	"time"
+	"net"
 )
 
 const (
-	VERSION = "0.0.1"
+	VERSION = "0.0.2"
 )
 
 // config cruft
 type Config struct {
-	Target  string
-	Clients int
-	Sleep   string
+	Target   string
+	Deadline string
+	Clients  int
+	Sleep    string
+}
+
+// Wrapper funcs for websocket
+func DialTimeout(url_, protocol, origin string, timeout time.Duration) (ws *websocket.Conn, err error) {
+	config, err := websocket.NewConfig(url_, origin)
+	if err != nil {
+		return nil, err
+	}
+	if protocol != "" {
+		config.Protocol = []string{protocol}
+	}
+	return DialConfigTimeout(config, timeout)
+}
+
+func DialConfigTimeout(config *websocket.Config, timeout time.Duration) (ws *websocket.Conn, err error) {
+	var client net.Conn
+	if config.Location == nil {
+		return nil, &websocket.DialError{config, websocket.ErrBadWebSocketLocation}
+	}
+	if config.Origin == nil {
+		return nil, &websocket.DialError{config, websocket.ErrBadWebSocketOrigin}
+	}
+	switch config.Location.Scheme {
+	case "ws":
+		client, err = net.DialTimeout("tcp", config.Location.Host, timeout)
+
+	// tls.go doesn't support DialTimeout so we don't support it
+	default:
+		err = websocket.ErrBadScheme
+	}
+	if err != nil {
+		goto Error
+	}
+
+	ws, err = websocket.NewClient(config, client)
+	if err != nil {
+		goto Error
+	}
+	return
+
+Error:
+	return nil, &websocket.DialError{config, err}
+
 }
 
 func parseConfig(filename string) (config *Config) {
@@ -45,7 +90,9 @@ func parseConfig(filename string) (config *Config) {
 func poundSock(target string, config *Config, cmd, ctrl chan int, id int) (err error) {
 	hostname, err := os.Hostname()
 	log.Printf("INFO : (%d) Connecting to %s\n", id, target)
-	ws, err := websocket.Dial(config.Target, "", "http://"+hostname)
+	//ws, err := websocket.Dial(config.Target, "", "http://"+hostname)
+	dur, err := time.ParseDuration(config.Deadline)
+	ws, err := DialTimeout(config.Target, "", "http://"+hostname, dur)
 	if err != nil {
 		log.Printf("ERROR: (%d) Unable to open websocket: %s\n",
 			id, err.Error())
