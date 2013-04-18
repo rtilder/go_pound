@@ -92,7 +92,7 @@ func poundSock(target string, config *Config, cmd, ctrl chan int, id int) (err e
 	log.Printf("INFO : (%d) Connecting to %s\n", id, target)
 	//ws, err := websocket.Dial(config.Target, "", "http://"+hostname)
 	dur, err := time.ParseDuration(config.Deadline)
-	ws, err := DialTimeout(config.Target, "", "http://"+hostname, dur)
+	ws, err := DialTimeout(config.Target, "push-notification", "http://"+hostname, dur)
 	if err != nil {
 		log.Printf("ERROR: (%d) Unable to open websocket: %s\n",
 			id, err.Error())
